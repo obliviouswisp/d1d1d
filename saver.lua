@@ -18,40 +18,55 @@ local function createDebugConsole()
     frame.Name = "Console"
     frame.Size = UDim2.new(0, 500, 0, 300)
     frame.Position = UDim2.new(0.5, -250, 0.5, -150)
-    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-    frame.BorderSizePixel = 0
+    frame.BackgroundColor3 = Color3.fromRGB(5, 20, 10)
+    frame.BorderColor3 = Color3.fromRGB(0, 255, 110)
+    frame.BorderSizePixel = 1
     frame.Parent = gui
     local title = Instance.new("TextLabel")
     title.Size = UDim2.new(1, 0, 0, 30)
     title.BackgroundTransparency = 1
-    title.Text = "DodoKong Debug Console"
-    title.TextColor3 = Color3.new(1, 1, 1)
+    title.Text = "[ DODOKONG DEBUG CONSOLE ]"
+    title.TextColor3 = Color3.fromRGB(0, 255, 110)
     title.Font = Enum.Font.Code
     title.TextSize = 18
     title.Parent = frame
-    local output = Instance.new("TextBox")
-    output.Position = UDim2.new(0, 5, 0, 35)
-    output.Size = UDim2.new(1, -10, 1, -40)
-    output.ClearTextOnFocus = false
-    output.MultiLine = true
-    output.TextEditable = false
+    local viewport = Instance.new("ScrollingFrame")
+    viewport.Position = UDim2.new(0, 5, 0, 35)
+    viewport.Size = UDim2.new(1, -10, 1, -40)
+    viewport.CanvasSize = UDim2.new()
+    viewport.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    viewport.ScrollBarThickness = 6
+    viewport.ScrollBarImageColor3 = Color3.fromRGB(0, 255, 110)
+    viewport.BackgroundColor3 = Color3.fromRGB(0, 12, 5)
+    viewport.BorderColor3 = Color3.fromRGB(0, 120, 50)
+    viewport.Parent = frame
+    local output = Instance.new("TextLabel")
+    output.Size = UDim2.new(1, -8, 0, 0)
+    output.AutomaticSize = Enum.AutomaticSize.Y
+    output.BackgroundTransparency = 1
+    output.TextWrapped = true
     output.TextXAlignment = Enum.TextXAlignment.Left
     output.TextYAlignment = Enum.TextYAlignment.Top
     output.Font = Enum.Font.Code
     output.TextSize = 14
-    output.TextColor3 = Color3.new(1, 1, 1)
-    output.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-    output.BorderSizePixel = 0
+    output.TextColor3 = Color3.fromRGB(0, 255, 110)
     output.Text = "Debug Console Ready...\n"
-    output.Parent = frame
+    output.Parent = viewport
+    local lines = { "Debug Console Ready..." }
     return function(...)
         local values = { ... }
         local parts = table.create(#values)
         for i, value in ipairs(values) do
             parts[i] = tostring(value)
         end
-        output.Text ..= table.concat(parts, " ") .. "\n"
-        output.CursorPosition = #output.Text + 1
+        table.insert(lines, table.concat(parts, " "))
+        if #lines > 200 then
+            table.remove(lines, 1)
+        end
+        output.Text = table.concat(lines, "\n")
+        task.defer(function()
+            viewport.CanvasPosition = Vector2.new(0, math.max(0, output.TextBounds.Y - viewport.AbsoluteSize.Y))
+        end)
     end
 end
 
@@ -3562,8 +3577,12 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 	local gethiddenproperty_fallback
 
+	local hierarchyLogShown = false
 	local function save_hierarchy(hierarchy)
-		DebugLog("Step 3/5: Serializing hierarchy")
+		if not hierarchyLogShown then
+			hierarchyLogShown = true
+			DebugLog("Step 3/5: Serializing hierarchy")
+		end
 		for _, instance in next, hierarchy do
 			local __DARKLUA_CONTINUE_68 = false
 			repeat
@@ -4106,62 +4125,57 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		end
 
 		if OPTIONS.ReadMe then
+			local function formatReadMeJson(raw)
+				local result, depth, inString, escaped = {}, 0, false, false
+				for index = 1, #raw do
+					local character = string.sub(raw, index, index)
+					if inString then
+						table.insert(result, character)
+						if escaped then
+							escaped = false
+						elseif character == "\\" then
+							escaped = true
+						elseif character == '"' then
+							inString = false
+						end
+					elseif character == '"' then
+						inString = true
+						table.insert(result, character)
+					elseif character == "{" or character == "[" then
+						depth = depth + 1
+						table.insert(result, character .. "\n" .. string.rep("\t", depth + 2))
+					elseif character == "}" or character == "]" then
+						depth = depth - 1
+						table.insert(result, "\n" .. string.rep("\t", depth + 2) .. character)
+					elseif character == "," then
+						table.insert(result, ",\n" .. string.rep("\t", depth + 2))
+					elseif character == ":" then
+						table.insert(result, ": ")
+					else
+						table.insert(result, character)
+					end
+				end
+				return table.concat(result)
+			end
+
 			save_extra(
 				"README",
 				nil,
 				nil,
 				"Script",
-				"--[[\n"
-					.. (#RecoveredScripts ~= 0 and "\t\tIMPORTANT: Original Source of these Scripts was Recovered: " .. service.HttpService:JSONEncode(
-						RecoveredScripts
-					) .. "\n" or "")
-					.. [[
-		Thank you for using DodoKong.
-
-		If you didn't save in Binary (rbxl) - it's recommended to save the game right away to take advantage of the binary format & to preserve values of certain properties if you used IgnoreDefaultProperties setting (as they might change in the future).
-		You can do that by going to FILE -> Save to File As -> Make sure File Name ends with .rbxl -> Save
-
-		ServerStorage, ServerScriptService and Server Scripts are IMPOSSIBLE to save because of FilteringEnabled.
-
-		If your player cannot spawn into the game, please move the scripts in StarterPlayer somewhere else or delete them. Then run `game:GetService("Players").CharacterAutoLoads = true`.
-		And use "Play Here" to start game instead of "Play" to spawn your Character where your Camera currently is.
-
-		If the chat system does not work, please use the explorer and delete everything inside the TextChatService/Chat service(s). 
-		Or run `game:GetService("Chat"):ClearAllChildren() game:GetService("TextChatService"):ClearAllChildren()`
-				
-		If Union and MeshPart collisions don't work, run the script below in the Studio Command Bar:
-				
-				
-		local C = game:GetService("CoreGui")
-		local D = Enum.CollisionFidelity.Default
-				
-		for _, v in next, game:GetDescendants() do
-			if v:IsA("TriangleMeshPart") and not v:IsDescendantOf(C) then
-				v.CollisionFidelity = D
-			end
-		end
-		print("Done")
-				
-		If you can't move the Camera, run this script in the Studio Command Bar:
-			
-		workspace.CurrentCamera.CameraType = Enum.CameraType.Fixed
-		
-		Or Destroy the Camera.
-
-		This file was generated with the following settings:
-		]]
-					.. service.HttpService:JSONEncode(OPTIONS)
-					.. "\n\n\t\tElapsed time: "
+				"--[[\n\t\tSaved By: DodoKong\n\n\t\tGenerated Settings:\n\t\t"
+					.. formatReadMeJson(service.HttpService:JSONEncode(OPTIONS))
+					.. "\n\n\t\tSave Details:\n\t\tElapsed Time: "
 					.. os.clock() - elapse_t
-					.. " Date (UTC): "
+					.. "\n\t\tDate (UTC): "
 					.. DateTime.now():FormatUniversalTime("LL LTS", "en-gb")
-					.. " PlaceId: "
+					.. "\n\t\tPlace ID: "
 					.. game.PlaceId
-					.. " PlaceVersion: "
+					.. "\n\t\tPlace Version: "
 					.. game.PlaceVersion
-					.. " Client Version: "
+					.. "\n\t\tClient Version: "
 					.. FULL_VERSION
-					.. " Platform: "
+					.. "\n\t\tPlatform: "
 					.. (
 						select(
 							2,
@@ -4170,7 +4184,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 							end)
 						) or "Unknown"
 					)
-					.. " Executor: "
+					.. "\n\t\tExecutor: "
 					.. (identify_executor and table.concat({ identify_executor() }, " ") or "Unknown")
 					.. "\n]]"
 			)
