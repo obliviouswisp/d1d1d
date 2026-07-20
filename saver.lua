@@ -2134,27 +2134,6 @@ do
 			[2] = function()  
 				local client_version_str = tostring(CLIENT_VERSION)
 				local dump
-				local matching_versions, matched, is_matched, exact_match = {}, {}
-				local function process_line(line, noinsert)
-					local file_version, patch_commit, version_hash =
-						string.match(line, '"%d+%.(%d+)%.([^"]+)": "(version%-[^"]+)')
-					if file_version == client_version_str then
-						is_matched = true
-						if version_hash and not matched[version_hash] then  
-							matched[version_hash] = true
-							if not noinsert then  
-								table.insert(matching_versions, version_hash)  
-							end
-							if string.sub(FULL_VERSION, -#patch_commit) == patch_commit then
-								return version_hash  
-							end
-						end
-					elseif is_matched then
-						return false  
-					end
-				end
-
-				 
 				local function isFullDump(classes)
 					if not classes then
 						return false
@@ -2178,80 +2157,31 @@ do
 				end
 
 				local function fetchFullApiDump(hash)
-					 
 					local decoded = tryFetchDump("https://setup.rbxcdn.com/" .. hash .. "-Full-API-Dump.json")
 					if decoded and isFullDump(decoded.Classes) then
-						return service.HttpService:JSONEncode(decoded.Classes)  
-					end
-
-					 
-					 
-					decoded = tryFetchDump(
-						"https://raw.githubusercontent.com/setup-rbxcdn/roblox-full-api-dumps/refs/heads/main/full-dumps/"
-							.. hash
-							.. "-Full-API-Dump.json"
-					)
-					if decoded and isFullDump(decoded.Classes) then  
 						return service.HttpService:JSONEncode(decoded.Classes)
 					end
-
 					return nil
 				end
 
-				do
-					local o, r = pcall(
-						game.HttpGet,
-						game,
-						"https://raw.githubusercontent.com/setup-rbxcdn/setup-rbxcdn.github.io/refs/heads/main/version-history/Windows/Studio64.json",
-						true
-					)
-					if o then
-						local version_history = string.split(r, "\n")
-						version_history[#version_history] = nil  
-						 
-						for i = #version_history, 2, -1 do  
-							local res = process_line(version_history[i])
-							if res == false then
-								break
-							elseif res then
-								exact_match = res
-							end
-						end
-					end
-				end
-				do  
-					local function fallback_channel(channel)
-						local ok, res = pcall(function()
-							return service.HttpService:JSONDecode(
-								game:HttpGet(
-									"https://clientsettingscdn.roblox.com/v2/client-version/WindowsStudio64"
-										.. (channel and "/channel/" .. channel or ""),
-									true
-								)
+				local function fetchChannelVersionHash(channel)
+					local ok, response = pcall(function()
+						return service.HttpService:JSONDecode(
+							game:HttpGet(
+								"https://clientsettingscdn.roblox.com/v2/client-version/WindowsStudio64"
+									.. (channel and "/channel/" .. channel or ""),
+								true
 							)
-						end)
-						if not ok then
-							return
-						end
-						if res.version and res.clientVersionUpload then  
-							local line = '"' .. res.version .. '": "' .. res.clientVersionUpload
-							return process_line(line, true)
-						end
-					end
-					if not exact_match then
-						exact_match = fallback_channel("zbeta") or fallback_channel()  
+						)
+					end)
+					if ok and response.version == client_version_str then
+						return response.clientVersionUpload
 					end
 				end
-				if exact_match then
-					dump = fetchFullApiDump(exact_match)
-				end
-				if not dump then
-					for _, version_hash in next, matching_versions do  
-						dump = fetchFullApiDump(version_hash)
-						if dump then
-							break
-						end
-					end
+
+				local versionHash = fetchChannelVersionHash("zbeta") or fetchChannelVersionHash()
+				if versionHash then
+					dump = fetchFullApiDump(versionHash)
 				end
 				return dump
 			end,
