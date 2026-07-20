@@ -2611,7 +2611,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 	local OPTIONS = {
 		mode = "optimized",
-		Decompile = true,
+		Decompile = false,
 		scriptcache = true,
 		 
 		DecompileTimeout = 10,
@@ -3388,6 +3388,80 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		return true
 	end
 
+	local function cleanRecoveredSource(source)
+		local result, size = {}, 0
+		local index, length = 1, #source
+		local function append(value)
+			size = size + 1
+			result[size] = value
+		end
+		while index <= length do
+			local character = string.sub(source, index, index)
+			if character == '"' or character == "'" then
+				local quote = character
+				local start = index
+				index = index + 1
+				while index <= length do
+					local current = string.sub(source, index, index)
+					index = index + 1
+					if current == "\\" then
+						index = index + 1
+					elseif current == quote then
+						break
+					end
+				end
+				append(string.sub(source, start, index - 1))
+			elseif character == "[" then
+				local equals = string.match(string.sub(source, index), "^%[(=*)%[")
+				if equals then
+					local closing = "]" .. equals .. "]"
+					local closingStart = string.find(source, closing, index + #equals + 2, true)
+					if closingStart then
+						local closingEnd = closingStart + #closing - 1
+						append(string.sub(source, index, closingEnd))
+						index = closingEnd + 1
+					else
+						append(character)
+						index = index + 1
+					end
+				else
+					append(character)
+					index = index + 1
+				end
+			elseif character == "-" and string.sub(source, index + 1, index + 1) == "-" then
+				local longEquals = string.match(string.sub(source, index + 2), "^%[(=*)%[")
+				if longEquals then
+					local closing = "]" .. longEquals .. "]"
+					local commentEnd = string.find(source, closing, index + #longEquals + 4, true)
+					if commentEnd then
+						local comment = string.sub(source, index, commentEnd + #closing - 1)
+						append(string.gsub(comment, "[^\r\n]", " "))
+						index = commentEnd + #closing
+					else
+						index = length + 1
+					end
+				else
+					local lineEnd = string.find(source, "\n", index, true)
+					if lineEnd then
+						append(" ")
+						index = lineEnd
+					else
+						index = length + 1
+					end
+				end
+			else
+				append(character)
+				index = index + 1
+			end
+		end
+		local cleaned = table.concat(result)
+		cleaned = string.gsub(cleaned, "[ \t]+\r\n", "\n")
+		cleaned = string.gsub(cleaned, "[ \t]+\n", "\n")
+		cleaned = string.gsub(cleaned, "\n[ \t]*\n[ \t]*\n+", "\n\n")
+		cleaned = string.gsub(cleaned, "(\n[ \t]*end)\n([ \t]*local )", "%1\n\n%2")
+		return cleaned
+	end
+
 	local function replaceClassName(instance, InstanceName, ClassName)
 		local InstanceOverride
 		if InstanceName ~= ClassName then  
@@ -3961,9 +4035,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 													end
 												end
 
-												value = "-- Saved By: DodoKong\n\n"
-													.. (hasLinkedSource and "-- Original Source: https://assetdelivery.roblox.com/v1/asset/?" .. (LinkedSource_type or "id") .. "=" .. (LinkedSource or LinkedSource_Url) .. "\n\n" or "")
-													.. value
+												value = "-- Saved By: DodoKong\n\n" .. cleanRecoveredSource(value)
 											end
 										end
 										value = XML_Descriptors.__PROTECTEDSTRING(value)
