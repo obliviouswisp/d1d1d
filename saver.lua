@@ -102,13 +102,119 @@ end
 
 local global_container
 do
-	local filename = "UniversalMethodFinder"
-
 	local finder
-	finder, global_container = loadstring(
-		game:HttpGet("https://raw.githubusercontent.com/luau/SomeHub/main/" .. filename .. ".luau", true),
-		filename
-	)()
+	finder, global_container = (function()
+		local globalenv = getgenv and getgenv() or _G or shared
+		local globalcontainer = globalenv.globalcontainer
+
+		if not globalcontainer then
+			globalcontainer = {}
+			globalenv.globalcontainer = globalcontainer
+		end
+
+		local genvs = {}
+		if getgenv then
+			table.insert(genvs, getgenv())
+		end
+		table.insert(genvs, shared)
+		table.insert(genvs, _G)
+
+		local calllimit = 0
+		do
+			local function determineCalllimit()
+				calllimit = calllimit + 1
+				determineCalllimit()
+			end
+			pcall(determineCalllimit)
+		end
+
+		local function isEmpty(dict)
+			for _ in next, dict do
+				return false
+			end
+			return true
+		end
+
+		local depth, printresults, hardlimit, query, antioverflow, matchedall
+		local function recurseEnv(env, envname)
+			if globalcontainer == env or antioverflow[env] then
+				return
+			end
+			antioverflow[env] = true
+			depth = depth + 1
+
+			for name, val in next, env do
+				if matchedall then
+					break
+				end
+				local valueType = type(val)
+				if valueType == "table" then
+					if depth < hardlimit then
+						recurseEnv(val, name)
+					end
+				elseif valueType == "function" then
+					name = string.lower(tostring(name))
+					local matched
+					for methodname, pattern in next, query do
+						if pattern(name, envname) then
+							globalcontainer[methodname] = val
+							matched = matched or {}
+							table.insert(matched, methodname)
+							if printresults then
+								print(methodname, name)
+							end
+						end
+					end
+					if matched then
+						for _, methodname in next, matched do
+							query[methodname] = nil
+						end
+						matchedall = isEmpty(query)
+						if matchedall then
+							break
+						end
+					end
+				end
+			end
+			depth = depth - 1
+		end
+
+		local function embeddedFinder(Query, ForceSearch, CustomCallLimit, PrintResults)
+			antioverflow = {}
+			query = {}
+			local function find(stringValue, pattern)
+				return string.find(stringValue, pattern, nil, true)
+			end
+			for methodname, pattern in next, Query do
+				if not globalcontainer[methodname] or ForceSearch then
+					if not find(pattern, "return") then
+						pattern = "return " .. pattern
+					end
+					query[methodname] = loadstring(pattern)
+				end
+			end
+
+			depth = 0
+			printresults = PrintResults
+			hardlimit = CustomCallLimit or calllimit
+			recurseEnv(genvs)
+
+			local env = getfenv()
+			for methodname in next, Query do
+				if not globalcontainer[methodname] then
+					globalcontainer[methodname] = env[methodname]
+				end
+			end
+
+			hardlimit = nil
+			depth = nil
+			printresults = nil
+			antioverflow = nil
+			query = nil
+		end
+
+		return embeddedFinder, globalcontainer
+	end)()
 
 	finder({
 		 
