@@ -2999,7 +2999,11 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		end)
 
 		local function sanitizeFileName(str)
-			return string.sub(string.gsub(string.gsub(string.gsub(str, "[^%w _]", ""), " +", " "), " +$", ""), 1, 240)
+			str = string.gsub(str, "[^%w_]+", "_")
+			str = string.gsub(str, "_+", "_")
+			str = string.gsub(str, "^_+", "")
+			str = string.gsub(str, "_+$", "")
+			return string.sub(str, 1, 240)
 		end
 
 		if ToSaveInstance then
@@ -3031,7 +3035,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			placename =
 				sanitizeFileName("model " .. PlaceName .. " " .. (ToSaveInstance or tmp[1] or game):GetFullName())
 		else
-			placename = sanitizeFileName("place " .. PlaceName)
+			placename = sanitizeFileName("DodoKong_place_" .. PlaceName)
 		end
 
 		if OPTIONS.AvoidFileOverwrite and isfile then
