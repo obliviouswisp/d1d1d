@@ -2611,7 +2611,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 	local OPTIONS = {
 		mode = "optimized",
-		Decompile = true,
+		Decompile = false,
 		scriptcache = true,
 		 
 		DecompileTimeout = 10,
